@@ -1,0 +1,50 @@
+---
+- name: Add new disk, create LVM
+  hosts: first
+  become: yes
+  remote_user: azureadmin
+  vars:
+    new_disk: "/dev/sdc"
+    vg_name: "my_azure_vg"
+    lv_name: "my_azure_lv"
+    mount_point: "/first_fs"
+    ansible_user: azureadmin
+    ansible_ssh_private_key_file: /opt/git/azure_id_rsa
+  tasks:
+    - name: Create partition on the new disk
+      parted:
+        device: "{{ new_disk }}"
+        number: 1
+        state: present
+
+    - name: Create physical volume
+      command: pvcreate "{{ new_disk }}1"
+
+    - name: Create volume group
+      lvg:
+        vg: "{{ vg_name }}"
+        pvs: "{{ new_disk }}1"
+
+    - name: Create logical volume
+      lvol:
+        vg: "{{ vg_name }}"
+        lv: "{{ lv_name }}"
+        size: 100%FREE
+
+    - name: Create filesystem on the logical volume
+      filesystem:
+        fstype: xfs
+        dev: "/dev/mapper/{{ vg_name }}-{{ lv_name }}"
+      
+    - name: Create mount point directory
+      file:
+        path: "{{ mount_point }}"
+        state: directory
+
+    - name: Mount the filesystem
+      mount:
+        path: "{{ mount_point }}"
+        src: "/dev/mapper/{{ vg_name }}-{{ lv_name }}"
+        fstype: xfs
+        state: mounted
+
